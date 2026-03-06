@@ -21,52 +21,103 @@
 
 ## 아키텍처
 
+이 저장소는 런타임 서비스 분리와 공유 모듈 재사용을 함께 가져가는 구조입니다.
+가맹점 인증, 앱 사용자 인증, 결제 처리, 운영 조회를 서비스 단위로 나누고,
+공통 인증/예외 처리와 결제수단 도메인은 Gradle 멀티모듈로 재사용합니다.
+
+### 런타임 뷰
+
 ```mermaid
-flowchart TB
-    subgraph Client["Clients"]
-        Merchant["Merchant / Admin"]
-        User["App User"]
+flowchart LR
+    classDef client fill:#fff7ed,stroke:#ea580c,color:#7c2d12
+    classDef service fill:#eff6ff,stroke:#2563eb,color:#1e3a8a
+    classDef shared fill:#f8fafc,stroke:#475569,color:#0f172a
+    classDef data fill:#ecfdf5,stroke:#059669,color:#065f46
+
+    subgraph Client["Client Entry"]
+        Merchant["Merchant Console"]
+        User["App User App"]
     end
 
-    subgraph Service["Runtime Services"]
-        BM["backoffice-manage<br/>가맹점 가입, 로그인, SDK Key<br/>:8082"]
-        BA["backoffice-api<br/>API Key, 결제 이력 조회<br/>:8080"]
-        PY["payment<br/>결제 준비, 진행, 실행, 취소<br/>:8081"]
+    subgraph Runtime["Runtime Services"]
+        BM["backoffice-manage<br/>가맹점 가입, 로그인, 토큰/SDK Key<br/>:8082"]
         AU["appuser-manage<br/>사용자 가입, 카드 관리, 거래 조회<br/>:8083"]
+        PY["payment<br/>결제 준비, 실행, 취소, 상태 전이<br/>:8081"]
+        BA["backoffice-api<br/>API Key 관리, 결제 이력/상세 조회<br/>:8080"]
     end
 
     subgraph Shared["Shared Modules"]
-        CM["common<br/>JWT 검증, 예외, 로깅 유틸"]
-        PM["payment-method<br/>User/Card/PaymentMethod 엔티티"]
+        CM["common<br/>JWT 검증, 공통 예외, 로깅"]
+        PM["payment-method<br/>User/Card/PaymentMethod<br/>읽기 전용 결제/거래 모델"]
     end
 
-    subgraph Data["Data / Infra"]
+    subgraph Data["State Stores"]
         PG[("PostgreSQL")]
-        RD[("Redis")]
+        RD[("Redis Blocklist")]
     end
 
-    Merchant --> BM
-    Merchant --> BA
-    Merchant --> PY
-    User --> AU
-    User --> PY
+    Merchant -->|가맹점 인증 / SDK Key| BM
+    Merchant -->|운영 조회 / API Key| BA
+    Merchant -->|결제 생성| PY
+    User -->|사용자 인증 / 카드 관리| AU
+    User -->|결제 승인| PY
 
     BM --> PG
-    BA --> PG
-    PY --> PG
     AU --> PG
+    PY --> PG
+    BA --> PG
 
-    BM --> RD
-    AU --> RD
+    BM -->|로그아웃 토큰 무효화| RD
+    AU -->|로그아웃 토큰 무효화| RD
 
-    BM -. uses .-> CM
-    BA -. uses .-> CM
-    AU -. uses .-> CM
+    BM -. 공통 인증/예외 .-> CM
+    AU -. 공통 인증/예외 .-> CM
+    BA -. 공통 인증/예외 .-> CM
 
-    BA -. reads .-> PM
-    PY -. uses .-> PM
-    AU -. uses .-> PM
+    AU -. 공유 엔티티/리포지토리 .-> PM
+    PY -. 공유 엔티티/리포지토리 .-> PM
+    BA -. 조회용 엔티티 스캔 .-> PM
+
+    class Merchant,User client
+    class BM,AU,PY,BA service
+    class CM,PM shared
+    class PG,RD data
 ```
+
+- `backoffice-manage`와 `appuser-manage`는 JWT 인증과 Redis Blocklist를 사용합니다.
+- `payment`는 결제 상태 전이를 담당하고, `payment-method`의 카드/결제수단 모델을 참조합니다.
+- `backoffice-api`는 운영 조회 서비스이며, `payment`와 `payment-method` 패키지를 함께 스캔해 조회 모델을 가져옵니다.
+- 모든 런타임 서비스는 PostgreSQL을 기준 데이터 저장소로 사용합니다.
+
+### 모듈 구성 뷰
+
+```mermaid
+flowchart TB
+    classDef runtime fill:#eff6ff,stroke:#2563eb,color:#1e3a8a
+    classDef shared fill:#f8fafc,stroke:#475569,color:#0f172a
+
+    BM["backoffice-manage"]
+    BA["backoffice-api"]
+    AU["appuser-manage"]
+    PY["payment"]
+    CM["common"]
+    PM["payment-method"]
+
+    BM --> CM
+    BA --> CM
+    BA --> PY
+    BA --> PM
+    AU --> CM
+    AU --> PM
+    PY --> PM
+
+    class BM,BA,AU,PY runtime
+    class CM,PM shared
+```
+
+- `common`과 `payment-method`는 별도 포트를 열지 않는 공유 모듈입니다.
+- `appuser-manage`, `payment`, `backoffice-api`는 `EntityScan`과 `EnableJpaRepositories`로 공유 엔티티/리포지토리를 가져옵니다.
+- 따라서 현재 구조는 완전히 독립된 데이터 저장소를 가진 분산 시스템이라기보다, 서비스 경계를 분리한 멀티모듈 모노레포에 가깝습니다.
 
 ## 결제 흐름
 
