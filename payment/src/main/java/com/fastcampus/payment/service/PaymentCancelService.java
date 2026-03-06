@@ -36,9 +36,10 @@ public class PaymentCancelService {
 
     @Idempotent
     @Transactional
-    public Payment cancelPayment(String token) {
+    public Payment cancelPayment(String token, Long merchantId) {
         // payment 조회
         Payment payment = extractPaymentByToken(token);
+        validateMerchantAccess(payment, merchantId);
         // 결제 정보가 취소 가능한 status인지 확인
         try {
             // try catch 문을 여기다 두는 게 맞나...?
@@ -74,12 +75,17 @@ public class PaymentCancelService {
             // tokenHandler.decodeQrToken(); 중에 token 만료 exception 발생 시
             throw new HttpException(PaymentErrorCode.PAYMENT_EXPIRED);
         } catch (Exception e) {
-            e.printStackTrace();
-            throw e;
+            throw new HttpException(PaymentErrorCode.INVALID_PAYMENT_REQUEST, e);
         }
         // payment 있으면 반환하고 없으면 NOT FOUND 예외 발생
         Payment payment = paymentOpt.orElseThrow(() -> new HttpException(PaymentErrorCode.PAYMENT_NOT_FOUND));
         return payment;
+    }
+
+    private void validateMerchantAccess(Payment payment, Long merchantId) {
+        if (!payment.getMerchantId().equals(merchantId)) {
+            throw new HttpException(PaymentErrorCode.FORBIDDEN_REQUEST);
+        }
     }
 
     private void checkPaymentStatusCancel(Payment payment) {

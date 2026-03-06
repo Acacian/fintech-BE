@@ -15,7 +15,6 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        System.out.println(">>>>> SecurityConfig loaded");
         http
             .csrf(csrf -> csrf.disable())
 //            .formLogin(form -> form.disable())  // 기본 로그인 페이지 비활성화

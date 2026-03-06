@@ -31,8 +31,8 @@ public class PaymentService {
         ).map(this::convertToDto);
     }
 
-    public Optional<PaymentDto> getPaymentDetail(String paymentToken) {
-        return paymentRepository.findByPaymentToken(paymentToken)
+    public Optional<PaymentDto> getPaymentDetail(String paymentToken, Long merchantId) {
+        return paymentRepository.findByPaymentTokenAndMerchantId(paymentToken, merchantId)
                 .map(this::convertToDto);
     }
 

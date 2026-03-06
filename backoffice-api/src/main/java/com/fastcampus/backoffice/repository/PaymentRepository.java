@@ -49,5 +49,15 @@ public interface PaymentRepository extends JpaRepository<Payment, Long> {
            "LEFT JOIN FETCH t.paymentMethod " +
            "WHERE p.paymentToken = :paymentToken")
     Optional<Payment> findByPaymentToken(String paymentToken);
+
+    @Query("SELECT p FROM Payment p " +
+           "LEFT JOIN FETCH p.lastTransaction t " +
+           "LEFT JOIN FETCH t.paymentMethod " +
+           "WHERE p.paymentToken = :paymentToken " +
+           "AND p.merchantId = :merchantId")
+    Optional<Payment> findByPaymentTokenAndMerchantId(
+            @Param("paymentToken") String paymentToken,
+            @Param("merchantId") Long merchantId
+    );
 }
 

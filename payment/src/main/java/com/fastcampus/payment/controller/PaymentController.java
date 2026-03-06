@@ -1,5 +1,6 @@
 package com.fastcampus.payment.controller;
 
+import com.fastcampus.payment.auth.PaymentAuthorizationService;
 import com.fastcampus.payment.dto.*;
 import com.fastcampus.payment.entity.Payment;
 import com.fastcampus.payment.service.PaymentCancelService;
@@ -24,13 +25,19 @@ public class PaymentController {
     private final PaymentProgressService paymentProgressService;
     private final PaymentExecutionService paymentExecutionService;
     private final PaymentCancelService paymentCancelService;
+    private final PaymentAuthorizationService paymentAuthorizationService;
 
     /**
      * 1. 결제 요청 처리
      * - 거래 생성 및 QR Token 반환
      */
     @PostMapping
-    public PaymentReadyResponse readyPayment(@RequestBody @Valid PaymentReadyRequest request) {
+    public PaymentReadyResponse readyPayment(
+            @RequestHeader("Authorization") String authorizationHeader,
+            @RequestBody @Valid PaymentReadyRequest request
+    ) {
+        Long authorizedMerchantId = paymentAuthorizationService.requireMerchantId(authorizationHeader);
+        paymentAuthorizationService.ensureMerchantAccess(authorizedMerchantId, request.getMerchantId());
         Payment payment = paymentReadyService.readyPayment(request.convertToPayment());
         return new PaymentReadyResponse(payment);
     }
@@ -51,7 +58,12 @@ public class PaymentController {
      * - payment_token + card_token 이용해 결제 처리
      */
     @PatchMapping
-    public PaymentExecutionResponse executePayment(@RequestBody @Valid PaymentExecutionRequest request) {
+    public PaymentExecutionResponse executePayment(
+            @RequestHeader("Authorization") String authorizationHeader,
+            @RequestBody @Valid PaymentExecutionRequest request
+    ) {
+        Long authorizedUserId = paymentAuthorizationService.requireUserId(authorizationHeader);
+        request.setUserId(authorizedUserId);
         PaymentExecutionResponse response = paymentExecutionService.execute(request);
         return response;
     }
@@ -62,8 +74,12 @@ public class PaymentController {
      * - transaction_token 으로 결제 정보 식별하여 결제 취소
      */
     @DeleteMapping("/{paymentToken}")
-    public PaymentCancelResponse cancelPayment(@NotBlank @PathVariable("paymentToken") String paymentToken) {
-        Payment payment = paymentCancelService.cancelPayment(paymentToken);
+    public PaymentCancelResponse cancelPayment(
+            @RequestHeader("Authorization") String authorizationHeader,
+            @NotBlank @PathVariable("paymentToken") String paymentToken
+    ) {
+        Long authorizedMerchantId = paymentAuthorizationService.requireMerchantId(authorizationHeader);
+        Payment payment = paymentCancelService.cancelPayment(paymentToken, authorizedMerchantId);
         PaymentCancelResponse response = new PaymentCancelResponse(payment);
         return response;
     }

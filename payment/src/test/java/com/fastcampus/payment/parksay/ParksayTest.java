@@ -10,6 +10,9 @@ import com.fastcampus.paymentmethod.entity.*;
 import com.fastcampus.paymentmethod.repository.CardInfoRepository;
 import com.fastcampus.paymentmethod.repository.PaymentMethodRepository;
 import com.fastcampus.paymentmethod.repository.UserRepository;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
 
+import javax.crypto.SecretKey;
 import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.UUID;
@@ -43,6 +47,7 @@ public class ParksayTest {
     private static Long TEST_TOTAL_AMOUNT;
     private static Long TEST_MERCHANT_ID;
     private static String TEST_MERCHANT_ORDER_ID;
+    private static final String JWT_SECRET = "dYVzdC1zZWNyZXQta2V5LXlvdS2jYW4tY2hhbmdlPXRoaXM=";
 
     @BeforeEach
     public void beforeEach() {
@@ -73,7 +78,7 @@ public class ParksayTest {
     public void readyTest() {
         //
         PaymentReadyRequest request = new PaymentReadyRequest(TEST_TOTAL_AMOUNT, TEST_MERCHANT_ID, TEST_MERCHANT_ORDER_ID);
-        PaymentReadyResponse response = controller.readyPayment(request);
+        PaymentReadyResponse response = controller.readyPayment(createMerchantAuthorizationHeader(TEST_MERCHANT_ID), request);
         //
         LocalDateTime limit = commonUtil.generateExpiresAt();
         limit = limit.plusSeconds(5L);  // 테스트 작동 시간
@@ -111,19 +116,28 @@ public class ParksayTest {
         request.setCardToken(testCard.getToken());
         request.setPaymentMethodType(paymentMethod.getType().toString());
         request.setUserId(testUser.getUserId());
-        PaymentExecutionResponse testResponse = controller.executePayment(request);
+        PaymentExecutionResponse testResponse = controller.executePayment(
+                createUserAuthorizationHeader(testUser.getEmail()),
+                request
+        );
         System.out.println("cancelTest() > testResponse = " + testResponse);
 
         // when
         if(PaymentStatus.FAILED.equals(testResponse.getStatus())) {
             Assertions.assertThrows(HttpException.class, ()->{
                 System.out.println("cancelTest() > ========== failed");
-                PaymentCancelResponse response = controller.cancelPayment(testToken);
+                PaymentCancelResponse response = controller.cancelPayment(
+                        createMerchantAuthorizationHeader(TEST_MERCHANT_ID),
+                        testToken
+                );
             });
         } else {
     //        PaymentCancelRequest request = new PaymentCancelRequest(TEST_TOKEN);
             System.out.println("cancelTest() > ========== success");
-                PaymentCancelResponse response = controller.cancelPayment(testToken);
+                PaymentCancelResponse response = controller.cancelPayment(
+                        createMerchantAuthorizationHeader(TEST_MERCHANT_ID),
+                        testToken
+                );
 
                 // then
                 Assertions.assertEquals(TEST_MERCHANT_ORDER_ID, response.getMerchantOrderId());
@@ -179,8 +193,30 @@ public class ParksayTest {
     private String createTestPaymentToken() {
         //
         PaymentReadyRequest request = new PaymentReadyRequest(TEST_TOTAL_AMOUNT, TEST_MERCHANT_ID, TEST_MERCHANT_ORDER_ID);
-        PaymentReadyResponse response = controller.readyPayment(request);
+        PaymentReadyResponse response = controller.readyPayment(
+                createMerchantAuthorizationHeader(TEST_MERCHANT_ID),
+                request
+        );
         return response.getPaymentToken();
+    }
+
+    private String createMerchantAuthorizationHeader(Long merchantId) {
+        return "Bearer " + createSignedToken(String.valueOf(merchantId));
+    }
+
+    private String createUserAuthorizationHeader(String email) {
+        return "Bearer " + createSignedToken(email);
+    }
+
+    private String createSignedToken(String subject) {
+        SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(JWT_SECRET));
+        long now = System.currentTimeMillis();
+        return Jwts.builder()
+                .subject(subject)
+                .issuedAt(new Date(now))
+                .expiration(new Date(now + 60_000))
+                .signWith(key)
+                .compact();
     }
 
 }

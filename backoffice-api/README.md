@@ -12,12 +12,12 @@
 
 | Method | Path | 설명 |
 | --- | --- | --- |
-| `POST` | `/merchants/api-keys/{merchantId}` | API Key 발급 |
-| `POST` | `/merchants/api-keys/{merchantId}/reissue` | API Key 재발급 |
-| `GET` | `/merchants/api-keys/{merchantId}` | API Key 조회 |
-| `DELETE` | `/merchants/api-keys/{key}` | API Key 비활성화 |
-| `GET` | `/merchants/payment-histories` | 결제 이력 조회 |
-| `GET` | `/merchants/payment-histories/{paymentToken}` | 결제 상세 조회 |
+| `POST` | `/merchants/api-keys/{merchantId}` | API Key 발급 (`MERCHANT_ACCESS_TOKEN`) |
+| `POST` | `/merchants/api-keys/{merchantId}/reissue` | API Key 재발급 (`MERCHANT_ACCESS_TOKEN`) |
+| `GET` | `/merchants/api-keys/{merchantId}` | API Key 조회 (`MERCHANT_ACCESS_TOKEN`) |
+| `DELETE` | `/merchants/api-keys/{key}` | API Key 비활성화 (`MERCHANT_ACCESS_TOKEN`) |
+| `GET` | `/merchants/payment-histories` | 결제 이력 조회 (`MERCHANT_ACCESS_TOKEN`) |
+| `GET` | `/merchants/payment-histories/{paymentToken}` | 결제 상세 조회 (`MERCHANT_ACCESS_TOKEN`) |
 
 ## 의존 모듈
 
@@ -57,3 +57,4 @@
 
 - 이 서비스는 관리 화면용 조회와 운영 API를 제공합니다.
 - 가맹점 인증과 SDK Key 발급은 `backoffice-manage`가 담당합니다.
+- 조회와 키 관리 요청은 로그인한 가맹점 기준으로 소유권을 확인합니다.

@@ -123,7 +123,7 @@ public class PaymentExecutionServiceImpl implements PaymentExecutionService {
             throw new BadRequestException(PaymentErrorCode.PAYMENT_METHOD_NOT_FOUND);
         }
 
-        PaymentMethod method = methodList.get(0);   // TODO - 한 userId 와 한 method type 으로 조회 했는데 paymentMethod 결과가 여러 개일 경우 어떻게 처리할지? (예 - 신용 카드만 여러 개)
+        PaymentMethod method = yList.get(0);   // TODO - 한 userId 와 한 method type 으로 조회 했는데 paymentMethod 결과가 여러 개일 경우 어떻게 처리할지? (예 - 신용 카드만 여러 개)
         if(!method.getId().equals(cardInfo.getPaymentMethod().getId())) {
 
                 // 요청한 userId 로 찾은 결과와 cardToken 으로 가져온 결과가 서로 다름

@@ -5,10 +5,12 @@ import com.fastcampus.backoffice.entity.ApiKey;
 import com.fastcampus.backoffice.entity.Merchant;
 import com.fastcampus.backoffice.repository.ApiKeyRepository;
 import com.fastcampus.backoffice.repository.MerchantRepository;
+import com.fastcampus.common.exception.code.CommonErrorCode;
 import com.fastcampus.common.exception.code.MerchantErrorCode;
 import com.fastcampus.common.exception.exception.DuplicateKeyException;
+import com.fastcampus.common.exception.exception.ForbiddenException;
+import com.fastcampus.common.exception.exception.NotFoundException;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,12 +18,10 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -39,7 +39,7 @@ public class ApiKeyService {
     @Transactional
     public ApiKeyDto generateApiKey(Long merchantId) {
         Merchant merchant = merchantRepository.findById(merchantId)
-            .orElseThrow(() -> new RuntimeException("Merchant not found"));
+            .orElseThrow(() -> new NotFoundException(MerchantErrorCode.NOT_FOUND));
 
         if (apiKeyRepository.existsByMerchant_MerchantIdAndActiveTrue(merchantId)) {
             throw DuplicateKeyException.of(MerchantErrorCode.DUPLICATE_API_KEY);
@@ -70,19 +70,14 @@ public class ApiKeyService {
     public ApiKeyDto reissueApiKey(Long merchantId, String oldKey) {
         // 기존 API 키 찾기
         ApiKey oldApiKey = apiKeyRepository.findByEncryptedKey(oldKey)
-            .orElseThrow(() -> new RuntimeException("API Key not found"));
-        System.out.println("oldApiKey = " + oldApiKey);
-        System.out.println("merchantId = " + oldApiKey.getMerchant().getMerchantId());
+            .orElseThrow(() -> new NotFoundException(MerchantErrorCode.KEY_NOT_FOUND));
         // 가맹점 ID 검증
         if (!oldApiKey.getMerchant().getMerchantId().equals(merchantId)) {
-            throw new RuntimeException("Invalid merchant ID for this API key");
+            throw new ForbiddenException(CommonErrorCode.FORBIDDEN);
         }
 
         // 기존 API 키 비활성화
-        System.out.println("ActivityBefore = " + oldApiKey.getActive());
         apiKeyRepository.deactivateActiveKeyByMerchantId(merchantId);
-        System.out.println("ActivityAfter = " + oldApiKey.getActive());
-
 
         // 새로운 API 키 발급
         return generateApiKey(merchantId);
@@ -96,9 +91,12 @@ public class ApiKeyService {
     }
 
     @Transactional
-    public void deactivateApiKey(String key) {
+    public void deactivateApiKey(String key, Long authorizedMerchantId) {
         ApiKey apiKey = apiKeyRepository.findByEncryptedKey(key)
-            .orElseThrow(() -> new RuntimeException("API Key not found"));
+            .orElseThrow(() -> new NotFoundException(MerchantErrorCode.KEY_NOT_FOUND));
+        if (!apiKey.getMerchant().getMerchantId().equals(authorizedMerchantId)) {
+            throw new ForbiddenException(CommonErrorCode.FORBIDDEN);
+        }
         apiKey.setActive(false);
         apiKeyRepository.save(apiKey);
     }

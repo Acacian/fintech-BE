@@ -6,6 +6,7 @@ import org.springframework.boot.autoconfigure.domain.EntityScan;
 
 @SpringBootApplication(scanBasePackages = {
         "com.fastcampus.backoffice",
+        "com.fastcampus.common",
         "com.fastcampus.payment.entity",
         "com.fastcampus.paymentmethod.entity"
 })

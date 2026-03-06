@@ -1,8 +1,10 @@
 package com.fastcampus.backoffice.controller;
 
 import com.fastcampus.backoffice.dto.PaymentDto;
+import com.fastcampus.backoffice.service.MerchantAccessService;
 import com.fastcampus.backoffice.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -20,16 +22,19 @@ import java.util.Optional;
 @Tag(name = "Payment History Management", description = "Payment history management endpoints")
 public class PaymentController {
     private final PaymentService paymentService;
+    private final MerchantAccessService merchantAccessService;
 
     @GetMapping
     @Operation(summary = "결제내역 전체 조회")
     public ResponseEntity<Page<PaymentDto>> getPaymentHistory(
+            @Parameter(hidden = true) @RequestHeader("Authorization") String authorizationHeader,
             @RequestParam Long merchantId,
             @RequestParam(required = false) String status,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate startDate,
             @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate endDate,
             Pageable pageable
     ) {
+        merchantAccessService.ensureMerchantAccess(authorizationHeader, merchantId);
         return ResponseEntity.ok(paymentService.getPaymentHistory(
                 merchantId, status, startDate.atStartOfDay(), endDate.atStartOfDay(), pageable
         ));
@@ -38,9 +43,11 @@ public class PaymentController {
     @GetMapping("/{paymentToken}")
     @Operation(summary = "결제내역 상세 조회")
     public ResponseEntity<PaymentDto> getPaymentDetail(
+            @Parameter(hidden = true) @RequestHeader("Authorization") String authorizationHeader,
             @PathVariable String paymentToken
     ) {
-        Optional<PaymentDto> payment = paymentService.getPaymentDetail(paymentToken);
+        Long authorizedMerchantId = merchantAccessService.resolveAuthorizedMerchantId(authorizationHeader);
+        Optional<PaymentDto> payment = paymentService.getPaymentDetail(paymentToken, authorizedMerchantId);
         return payment.map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

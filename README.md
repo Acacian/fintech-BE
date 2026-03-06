@@ -235,12 +235,12 @@ curl http://localhost:8080/api-docs
 | `backoffice-manage` | `POST` | `/merchants/register` | 가맹점 회원가입 |
 | `backoffice-manage` | `POST` | `/merchants/login` | 가맹점 로그인 |
 | `backoffice-manage` | `GET` | `/sdk-key` | SDK Key 조회 |
-| `backoffice-api` | `POST` | `/merchants/api-keys/{merchantId}` | API Key 발급 |
-| `backoffice-api` | `GET` | `/merchants/payment-histories` | 가맹점 결제 이력 조회 |
-| `payment` | `POST` | `/api/payments` | 결제 준비 |
+| `backoffice-api` | `POST` | `/merchants/api-keys/{merchantId}` | API Key 발급 (`MERCHANT_ACCESS_TOKEN`) |
+| `backoffice-api` | `GET` | `/merchants/payment-histories` | 가맹점 결제 이력 조회 (`MERCHANT_ACCESS_TOKEN`) |
+| `payment` | `POST` | `/api/payments` | 결제 준비 (`MERCHANT_API_KEY`) |
 | `payment` | `GET` | `/api/payments/{paymentToken}` | 결제 진행 상태 조회 |
-| `payment` | `PATCH` | `/api/payments` | 결제 실행 |
-| `payment` | `DELETE` | `/api/payments/{paymentToken}` | 결제 취소 |
+| `payment` | `PATCH` | `/api/payments` | 결제 실행 (`USER_ACCESS_TOKEN`) |
+| `payment` | `DELETE` | `/api/payments/{paymentToken}` | 결제 취소 (`MERCHANT_API_KEY`) |
 | `appuser-manage` | `POST` | `/app-users/register` | 사용자 회원가입 |
 | `appuser-manage` | `POST` | `/app-users/login` | 사용자 로그인 |
 | `appuser-manage` | `POST` | `/app-users/cards/register` | 카드 등록 |
@@ -299,6 +299,7 @@ curl -X POST http://localhost:8083/app-users/cards/register \
 
 ```bash
 curl -X POST http://localhost:8081/api/payments \
+  -H "Authorization: Bearer {MERCHANT_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{
     "merchantId": 1,
@@ -311,12 +312,12 @@ curl -X POST http://localhost:8081/api/payments \
 
 ```bash
 curl -X PATCH http://localhost:8081/api/payments \
+  -H "Authorization: Bearer {USER_ACCESS_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{
     "paymentToken": "{PAYMENT_TOKEN}",
     "cardToken": "{CARD_TOKEN}",
-    "paymentMethodType": "CARD",
-    "userId": 1
+    "paymentMethodType": "CARD"
   }'
 ```
 

@@ -13,10 +13,10 @@
 
 | Method | Path | 설명 |
 | --- | --- | --- |
-| `POST` | `/api/payments` | 결제 준비 |
+| `POST` | `/api/payments` | 결제 준비 (`MERCHANT_API_KEY`) |
 | `GET` | `/api/payments/{paymentToken}` | 결제 상태 조회 |
-| `PATCH` | `/api/payments` | 결제 실행 |
-| `DELETE` | `/api/payments/{paymentToken}` | 결제 취소 |
+| `PATCH` | `/api/payments` | 결제 실행 (`USER_ACCESS_TOKEN`) |
+| `DELETE` | `/api/payments/{paymentToken}` | 결제 취소 (`MERCHANT_API_KEY`) |
 
 ## 의존 모듈
 
@@ -51,4 +51,5 @@
 ## 참고
 
 - 이 서비스는 `payment-method` 모듈의 공유 엔티티를 사용합니다.
+- 가맹점 호출은 `MERCHANT_API_KEY`, 사용자 호출은 `USER_ACCESS_TOKEN` 기준으로 검증합니다.
 - 루트 README의 Quick Start와 API 요약이 이 모듈 기준으로 함께 유지됩니다.
