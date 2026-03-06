@@ -1,306 +1,311 @@
-# PassionPay - 핀테크 플랫폼
+# fintech-BE
 
-[![Java](https://img.shields.io/badge/Java-21-orange?style=flat-square&logo=openjdk)](https://openjdk.java.net/)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.5-brightgreen?style=flat-square&logo=spring)](https://spring.io/projects/spring-boot)
-[![Gradle](https://img.shields.io/badge/Gradle-8.7-blue?style=flat-square&logo=gradle)](https://gradle.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14+-blue?style=flat-square&logo=postgresql)](https://www.postgresql.org/)
-[![Redis](https://img.shields.io/badge/Redis-7+-red?style=flat-square&logo=redis)](https://redis.io/)
+> PassionPay 결제 플랫폼 백엔드 프로젝트 저장소.  
+> Java 21, Spring Boot 3.4, Gradle 멀티모듈 기반으로 가맹점, 결제, 앱 사용자 도메인을 분리한 백엔드 프로젝트입니다.
 
-## 🚀 프로젝트 개요
+[![Java](https://img.shields.io/badge/Java-21-orange?style=flat-square&logo=openjdk)](https://openjdk.org/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.5-6DB33F?style=flat-square&logo=spring)](https://spring.io/projects/spring-boot)
+[![Gradle](https://img.shields.io/badge/Gradle-8.x-02303A?style=flat-square&logo=gradle)](https://gradle.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-14%2B-4169E1?style=flat-square&logo=postgresql)](https://www.postgresql.org/)
+[![Redis](https://img.shields.io/badge/Redis-7%2B-DC382D?style=flat-square&logo=redis)](https://redis.io/)
+[![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker)](https://www.docker.com/)
 
-PassionPay는 **마이크로서비스 아키텍처** 기반의 종합 핀테크 플랫폼입니다. 결제 처리, 가맹점 관리, 사용자 관리 등 핀테크 생태계의 핵심 기능들을 독립적이고 확장 가능한 서비스로 구성했습니다.
+## 프로젝트 개요
 
-## 🏗️ 시스템 아키텍처
+이 저장소는 가맹점, 결제, 앱 사용자 도메인을 분리해 운영하는 멀티모듈 모노레포입니다.
 
+- 런타임 서비스 4개: `backoffice-api`, `backoffice-manage`, `payment`, `appuser-manage`
+- 공유 모듈 2개: `payment-method`, `common`
+- 핵심 주제: 도메인 분리, JWT 인증, Redis 기반 토큰 무효화, 결제 라이프사이클, 모듈별 Docker/Kubernetes 배포
+- 문서 및 운영 자산: 루트 README, ADR 4건, GitHub Issue Form, Jenkinsfile, Dockerfile, Kubernetes 매니페스트
+
+## 아키텍처
+
+```mermaid
+flowchart TB
+    subgraph Client["Clients"]
+        Merchant["Merchant / Admin"]
+        User["App User"]
+    end
+
+    subgraph Service["Runtime Services"]
+        BM["backoffice-manage<br/>가맹점 가입, 로그인, SDK Key<br/>:8082"]
+        BA["backoffice-api<br/>API Key, 결제 이력 조회<br/>:8080"]
+        PY["payment<br/>결제 준비, 진행, 실행, 취소<br/>:8081"]
+        AU["appuser-manage<br/>사용자 가입, 카드 관리, 거래 조회<br/>:8083"]
+    end
+
+    subgraph Shared["Shared Modules"]
+        CM["common<br/>JWT 검증, 예외, 로깅 유틸"]
+        PM["payment-method<br/>User/Card/PaymentMethod 엔티티"]
+    end
+
+    subgraph Data["Data / Infra"]
+        PG[("PostgreSQL")]
+        RD[("Redis")]
+    end
+
+    Merchant --> BM
+    Merchant --> BA
+    Merchant --> PY
+    User --> AU
+    User --> PY
+
+    BM --> PG
+    BA --> PG
+    PY --> PG
+    AU --> PG
+
+    BM --> RD
+    AU --> RD
+
+    BM -. uses .-> CM
+    BA -. uses .-> CM
+    AU -. uses .-> CM
+
+    BA -. reads .-> PM
+    PY -. uses .-> PM
+    AU -. uses .-> PM
 ```
-passionpay/
-├── 🏢 backoffice-api/        # 관리자 대시보드 API (포트: 8080)
-├── 🛠️ backoffice-manage/     # 가맹점 관리 서비스 (포트: 8082)  
-├── 💳 payment/               # 결제 처리 서비스 (포트: 8081)
-├── 🏪 payment-method/        # 결제 수단 관리 라이브러리
-├── 👥 appuser-manage/        # 앱 사용자 관리 서비스 (포트: 8083)
-└── 🔧 common/                # 공통 라이브러리 (JWT, 유틸리티)
+
+## 결제 흐름
+
+```mermaid
+sequenceDiagram
+    participant M as Merchant
+    participant BM as backoffice-manage
+    participant U as App User
+    participant AU as appuser-manage
+    participant P as payment
+    participant BA as backoffice-api
+
+    M->>BM: 가맹점 가입 / 로그인
+    U->>AU: 사용자 가입 / 로그인
+    U->>AU: 카드 등록
+    M->>P: POST /api/payments
+    U->>P: PATCH /api/payments
+    M->>BA: GET /merchants/payment-histories
 ```
 
-### 📊 서비스별 책임 분리
+## 서비스별 담당 영역
 
-| 서비스 | 포트 | 주요 기능 | 데이터베이스 |
-|--------|------|-----------|-------------|
-| **backoffice-api** | 8080 | 관리자 대시보드, API 키 관리, 결제 내역 조회 | PostgreSQL, Redis |
-| **backoffice-manage** | 8082 | 가맹점 회원가입/로그인, 가맹점 정보 관리, SDK 키 관리 | PostgreSQL, Redis |
-| **payment** | 8081 | 결제 요청/실행/취소, QR 코드 거래, 결제 상태 관리 | PostgreSQL, Redis |
-| **appuser-manage** | 8083 | 앱 사용자 회원가입/로그인, 사용자 정보 관리, 카드 관리 | PostgreSQL, Redis |
-| **payment-method** | - | 결제 수단 엔티티 및 리포지토리 (공유 라이브러리) | PostgreSQL |
-| **common** | - | JWT 처리, 공통 예외, 유틸리티 (공유 라이브러리) | - |
+| 모듈 | 포트 | 담당 영역 | 대표 엔드포인트 |
+| --- | --- | --- | --- |
+| `backoffice-manage` | `8082` | 가맹점 회원가입, 로그인, 토큰 재발급, SDK Key 조회/활성화/재발급 | `/merchants/*`, `/sdk-key/*` |
+| `backoffice-api` | `8080` | 관리자/백오피스용 API Key 관리, 결제 이력 조회 | `/merchants/api-keys/*`, `/merchants/payment-histories/*` |
+| `payment` | `8081` | 결제 준비, 진행 조회, 실행, 취소, 결제 상태 전이 | `/api/payments/*` |
+| `appuser-manage` | `8083` | 앱 사용자 가입/로그인, 카드 등록, 내 정보 조회, 거래 이력 조회 | `/app-users/*`, `/app-users/cards/*`, `/api/info/*` |
+| `payment-method` | - | 사용자, 카드, 결제, 거래 조회용 공유 엔티티/리포지토리 | 없음 (`공유 도메인 모듈`) |
+| `common` | - | JWT 검증, 공통 예외, 로깅 필터, 유틸리티 | 없음 (`공통 지원 모듈`) |
 
-## 🛠️ 기술 스택
+## 모듈 의존 구조
 
-### 🔧 Backend
-- **언어**: Java 21
-- **프레임워크**: Spring Boot 3.4.5
-- **보안**: Spring Security + JWT
-- **빌드 도구**: Gradle 8.7
-- **API 문서**: SpringDoc OpenAPI 3
+| 모듈 | 직접 의존 |
+| --- | --- |
+| `backoffice-manage` | `common` |
+| `appuser-manage` | `common`, `payment-method` |
+| `payment` | `payment-method` |
+| `backoffice-api` | `common`, `payment`, `payment-method` |
+| `payment-method` | 없음 |
+| `common` | 없음 |
 
-### 🗄️ 데이터베이스 & 캐시
-- **RDBMS**: PostgreSQL 14+
-- **캐시**: Redis 7+
-- **ORM**: Spring Data JPA + Hibernate
+## 기술 스택
 
-### 🐳 인프라 & 배포
-- **컨테이너**: Docker
-- **오케스트레이션**: Kubernetes
-- **CI/CD**: Jenkins
-- **모니터링**: Spring Boot Actuator
+- Language: Java 21
+- Framework: Spring Boot 3.4.5, Spring Security, Spring Data JPA, Validation, AOP
+- Docs: SpringDoc OpenAPI
+- Infra: PostgreSQL, Redis, Docker, Kubernetes, Jenkins
+- Build: Gradle multi-module
 
-## 🚀 빠른 시작
+## Quick Start
 
-### 필수 요구사항
-- ☑️ Java 21
-- ☑️ PostgreSQL 14+
-- ☑️ Redis 7+
-- ☑️ Docker (선택사항)
+### 1. 필수 환경
 
-### 1️⃣ 데이터베이스 설정
+- Java 21
+- PostgreSQL 14+
+- Redis 7+
+- Docker 선택 사항
+
+### 2. PostgreSQL 준비
+
 ```sql
--- PostgreSQL 데이터베이스 설정
 CREATE DATABASE testdb;
 CREATE USER testuser WITH PASSWORD 'testpass';
 GRANT ALL PRIVILEGES ON DATABASE testdb TO testuser;
 ```
 
-### 2️⃣ Redis 설정
-```bash
-# Docker로 Redis 실행
-docker run -d --name redis -p 6379:6379 redis:7-alpine
+### 3. Redis 준비
 
-# 또는 로컬 Redis 설치 후 실행
-redis-server
+```bash
+docker run -d --name fintech-redis -p 6379:6379 redis:7-alpine
 ```
 
-### 3️⃣ 전체 시스템 빌드
+Redis 인증이 필요한 환경에서는 서비스 실행 시 `REDIS_PASSWORD` 환경변수를 주입해 동일한 값으로 맞춥니다.
+
+### 4. 전체 빌드
+
 ```bash
-# 프로젝트 루트에서
 ./gradlew clean build
 ```
 
-### 4️⃣ 개별 서비스 실행
+### 5. 서비스 실행
+
 ```bash
-# 1. 가맹점 관리 서비스 (포트: 8082)
 ./gradlew :backoffice-manage:bootRun
-
-# 2. 결제 서비스 (포트: 8081)
-./gradlew :payment:bootRun
-
-# 3. 백오피스 API (포트: 8080)
-./gradlew :backoffice-api:bootRun
-
-# 4. 앱 사용자 관리 (포트: 8083)
 ./gradlew :appuser-manage:bootRun
+./gradlew :payment:bootRun
+./gradlew :backoffice-api:bootRun
 ```
 
-### 5️⃣ 서비스 상태 확인
+### 6. 문서 경로 확인
+
 ```bash
-# 각 서비스 헬스체크
-curl http://localhost:8080/actuator/health  # backoffice-api
-curl http://localhost:8082/actuator/health  # backoffice-manage
-curl http://localhost:8081/actuator/health  # payment
-curl http://localhost:8083/actuator/health  # appuser-manage
+curl http://localhost:8082/api-docs
+curl http://localhost:8083/api-docs
+curl http://localhost:8081/v3/api-docs
+curl http://localhost:8080/api-docs
 ```
 
-## 📚 모듈별 상세 문서
+## API 요약
 
-| 모듈 | 문서 링크 | 설명 |
-|------|-----------|------|
-| 🏢 **Backoffice API** | [문서 보기](./backoffice-api/README.md) | 관리자 대시보드 API 사용법 |
-| 🛠️ **Backoffice Manage** | [문서 보기](./backoffice-manage/README.md) | 가맹점 관리 서비스 가이드 |
-| 💳 **Payment** | [문서 보기](./payment/README.md) | 결제 처리 서비스 API |
-| 👥 **App User Manage** | [문서 보기](./appuser-manage/README.md) | 앱 사용자 관리 API |
-| 🏪 **Payment Method** | [문서 보기](./payment-method/README.md) | 결제 수단 라이브러리 |
-| 🔧 **Common** | [문서 보기](./common/README.md) | 공통 라이브러리 사용법 |
+### Swagger / OpenAPI
 
-## 🐳 Docker 실행
+| 서비스 | Swagger UI | API Docs |
+| --- | --- | --- |
+| `backoffice-manage` | `http://localhost:8082/swagger-ui.html` | `http://localhost:8082/api-docs` |
+| `backoffice-api` | `http://localhost:8080/swagger-ui.html` | `http://localhost:8080/api-docs` |
+| `payment` | `http://localhost:8081/swagger-ui.html` | `http://localhost:8081/v3/api-docs` |
+| `appuser-manage` | `http://localhost:8083/swagger-ui.html` | `http://localhost:8083/api-docs` |
 
-### 개별 서비스 실행
+### 핵심 엔드포인트
+
+| 서비스 | Method | Path | 설명 |
+| --- | --- | --- | --- |
+| `backoffice-manage` | `POST` | `/merchants/register` | 가맹점 회원가입 |
+| `backoffice-manage` | `POST` | `/merchants/login` | 가맹점 로그인 |
+| `backoffice-manage` | `GET` | `/sdk-key` | SDK Key 조회 |
+| `backoffice-api` | `POST` | `/merchants/api-keys/{merchantId}` | API Key 발급 |
+| `backoffice-api` | `GET` | `/merchants/payment-histories` | 가맹점 결제 이력 조회 |
+| `payment` | `POST` | `/api/payments` | 결제 준비 |
+| `payment` | `GET` | `/api/payments/{paymentToken}` | 결제 진행 상태 조회 |
+| `payment` | `PATCH` | `/api/payments` | 결제 실행 |
+| `payment` | `DELETE` | `/api/payments/{paymentToken}` | 결제 취소 |
+| `appuser-manage` | `POST` | `/app-users/register` | 사용자 회원가입 |
+| `appuser-manage` | `POST` | `/app-users/login` | 사용자 로그인 |
+| `appuser-manage` | `POST` | `/app-users/cards/register` | 카드 등록 |
+| `appuser-manage` | `GET` | `/api/info/transactions` | 내 거래 이력 조회 |
+
+### 대표 요청 예시
+
+가맹점 회원가입:
+
 ```bash
-# 백오피스 API
-docker build --build-arg MODULE=backoffice-api -t passionpay-backoffice-api .
-docker run -p 8080:8080 passionpay-backoffice-api
-
-# 결제 서비스
-docker build --build-arg MODULE=payment -t passionpay-payment .
-docker run -p 8081:8080 passionpay-payment
-```
-
-### Docker Compose (개발용)
-```yaml
-# docker-compose.yml
-version: '3.8'
-services:
-  postgres:
-    image: postgres:14-alpine
-    environment:
-      POSTGRES_DB: testdb
-      POSTGRES_USER: testuser
-      POSTGRES_PASSWORD: testpass
-    ports:
-      - "5432:5432"
-  
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-```
-
-## ☸️ Kubernetes 배포
-
-### 개발/테스트 환경 배포
-```bash
-# K8s 리소스 배포
-kubectl apply -f k8s/
-
-# 서비스 상태 확인
-kubectl get pods,svc
-```
-
-### 프로덕션 배포
-```bash
-# Jenkins 파이프라인을 통한 자동 배포
-# Jenkinsfile 참조
-```
-
-## 🧪 전체 시스템 테스트
-
-### 1️⃣ 가맹점 등록 및 로그인
-```bash
-# 가맹점 회원가입
 curl -X POST http://localhost:8082/merchants/register \
   -H "Content-Type: application/json" \
   -d '{
     "loginId": "merchant01",
     "loginPw": "passw0rd!",
-    "name": "테스트 가맹점",
+    "name": "Sample Store",
     "businessNumber": "123-45-67890",
-    "contactEmail": "merchant@test.com"
-  }'
-
-# 가맹점 로그인
-curl -X POST http://localhost:8082/merchants/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "loginId": "merchant01",
-    "loginPw": "passw0rd!"
+    "contactName": "Kim Owner",
+    "contactEmail": "owner@example.com",
+    "contactPhone": "010-1234-5678"
   }'
 ```
 
-### 2️⃣ 결제 플로우 테스트
+사용자 회원가입:
+
 ```bash
-# 1. 결제 준비
+curl -X POST http://localhost:8083/app-users/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "user@example.com",
+    "password": "passw0rd!",
+    "name": "Hong Gil Dong",
+    "phone": "010-1111-2222"
+  }'
+```
+
+카드 등록:
+
+```bash
+curl -X POST http://localhost:8083/app-users/cards/register \
+  -H "Authorization: Bearer {USER_ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cardNumber": "1234-5678-9012-3456",
+    "expiryDate": "12/29",
+    "birthDate": "900101",
+    "cardPw": "12",
+    "cvc": "123",
+    "paymentPassword": "123456",
+    "cardCompany": "SAMPLE-CARD",
+    "type": "CREDIT"
+  }'
+```
+
+결제 준비:
+
+```bash
 curl -X POST http://localhost:8081/api/payments \
   -H "Content-Type: application/json" \
   -d '{
     "merchantId": 1,
-    "amount": 10000,
+    "amount": 15000,
     "merchantOrderId": "ORDER-001"
   }'
+```
 
-# 2. 결제 실행
+결제 실행:
+
+```bash
 curl -X PATCH http://localhost:8081/api/payments \
   -H "Content-Type: application/json" \
   -d '{
-    "paymentToken": "payment_token_here",
-    "cardToken": "card_token_here"
+    "paymentToken": "{PAYMENT_TOKEN}",
+    "cardToken": "{CARD_TOKEN}",
+    "paymentMethodType": "CARD",
+    "userId": 1
   }'
 ```
 
-### 3️⃣ 백오피스에서 결제 내역 조회
+결제 이력 조회:
+
 ```bash
-curl -X GET "http://localhost:8080/merchants/payment-histories?merchantId=1&startDate=2024-01-01&endDate=2024-12-31" \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+curl -X GET "http://localhost:8080/merchants/payment-histories?merchantId=1&startDate=2026-01-01&endDate=2026-12-31&page=0&size=20" \
+  -H "Authorization: Bearer {MERCHANT_ACCESS_TOKEN}"
 ```
 
-## 📊 모니터링 및 로그
+## ADR
 
-### Actuator 엔드포인트
-```bash
-# 헬스체크
-curl http://localhost:8080/actuator/health
+아키텍처 의사결정 기록은 [docs/adr/README.md](./docs/adr/README.md)에 정리했습니다.
 
-# 메트릭 정보
-curl http://localhost:8080/actuator/metrics
+| ID | 제목 | 상태 | 관련 이슈 |
+| --- | --- | --- | --- |
+| `ADR-001` | [MSA 서비스 분리 기준](./docs/adr/ADR-001-msa-service-boundary.md) | Accepted | [#1](https://github.com/Acacian/fintech-BE/issues/1) |
+| `ADR-002` | [공통 기능과 결제수단 도메인의 공유 모듈화](./docs/adr/ADR-002-shared-modules.md) | Accepted | [#2](https://github.com/Acacian/fintech-BE/issues/2) |
+| `ADR-003` | [JWT + Redis Blocklist 인증 전략](./docs/adr/ADR-003-jwt-redis-blocklist.md) | Accepted | [#3](https://github.com/Acacian/fintech-BE/issues/3) |
+| `ADR-004` | [모듈별 Docker 이미지와 Jenkins/Kubernetes 배포](./docs/adr/ADR-004-module-image-delivery.md) | Accepted | [#4](https://github.com/Acacian/fintech-BE/issues/4) |
 
-# 애플리케이션 정보
-curl http://localhost:8080/actuator/info
-```
+## 변경 관리
 
-### API 문서
-- **Backoffice API**: http://localhost:8080/swagger-ui.html
-- **Backoffice Manage**: http://localhost:8082/swagger-ui.html
-- **Payment API**: http://localhost:8081/swagger-ui.html
-- **App User Manage**: http://localhost:8083/swagger-ui.html
+설계 변경은 ADR로, 기능 요청과 결함 관리는 GitHub Issue Form으로 관리합니다.
 
-### 로그 모니터링
-```bash
-# 전체 서비스 로그 확인
-tail -f logs/*.log
+- [열린 버그 이슈 보기](https://github.com/Acacian/fintech-BE/issues?q=is%3Aissue+is%3Aopen+label%3Abug)
+- [열린 기능 제안 보기](https://github.com/Acacian/fintech-BE/issues?q=is%3Aissue+is%3Aopen+label%3Aenhancement)
+- [열린 ADR 이슈 보기](https://github.com/Acacian/fintech-BE/issues?q=is%3Aissue+is%3Aopen+label%3Adocumentation+%22%5BADR%5D%22)
+- [버그 리포트 등록](https://github.com/Acacian/fintech-BE/issues/new?template=bug_report.yml): 장애 재현 정보와 영향 범위를 구조화해 기록
+- [기능 제안 등록](https://github.com/Acacian/fintech-BE/issues/new?template=feature_request.yml): 요구사항, 기대 효과, 우선순위를 명확히 정리
+- [ADR 제안 등록](https://github.com/Acacian/fintech-BE/issues/new?template=adr_proposal.yml): 아키텍처 변경 배경과 대안, 결정 초안을 문서화
+- ADR 문서는 [docs/adr/README.md](./docs/adr/README.md)에서 추적
 
-# 특정 서비스 로그
-tail -f logs/backoffice-api.log
-tail -f logs/payment.log
-```
+## 배포/운영 자산
 
-## 🔧 개발 환경 설정
+- [Jenkinsfile](./Jenkinsfile)
+- [Dockerfile](./Dockerfile)
+- [k8s](./k8s)
 
-### IDE 설정
-1. **IntelliJ IDEA** 권장
-2. **Lombok Plugin** 설치 필수
-3. **Java 21** SDK 설정
+## 참고
 
-### 코드 스타일
-- **Google Java Style Guide** 준수
-- **SpotBugs**, **Checkstyle** 적용
-
-### 테스트 실행
-```bash
-# 전체 모듈 테스트
-./gradlew test
-
-# 특정 모듈 테스트
-./gradlew :payment:test
-./gradlew :backoffice-api:test
-
-# 통합 테스트
-./gradlew integrationTest
-```
-
-## 🤝 기여하기
-
-1. **Fork** the Project
-2. Create your **Feature Branch** (`git checkout -b feature/AmazingFeature`)
-3. **Commit** your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. **Push** to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a **Pull Request**
-
-### 개발 가이드라인
-- 각 모듈은 독립적으로 개발
-- API 변경 시 문서 업데이트 필수
-- 테스트 커버리지 80% 이상 유지
-- 코드 리뷰 필수
-
-## 📞 지원 및 문의
-
-- **이슈 제기**: [GitHub Issues](../../issues)
-- **보안 관련**: security@passionpay.com
-- **기술 문의**: tech@passionpay.com
-
-## 📄 라이선스
-
-이 프로젝트는 **MIT 라이선스** 하에 배포됩니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
-
-## 🔄 버전 히스토리
-
-- **v0.0.1-SNAPSHOT** (현재)
-  - 초기 마이크로서비스 아키텍처 구성
-  - 결제, 가맹점 관리, 사용자 관리 기본 기능 구현
-  - JWT 인증 시스템 구축
-  - Kubernetes 배포 환경 구성
+- 상세 아키텍처 기록: [docs/adr/README.md](./docs/adr/README.md)
+- 이슈 템플릿: [.github/ISSUE_TEMPLATE](./.github/ISSUE_TEMPLATE)

@@ -1,0 +1,72 @@
+name: Bug Report
+description: 실행 오류, API 오동작, 배포 문제를 기록합니다.
+title: "[BUG] "
+labels:
+  - bug
+body:
+  - type: dropdown
+    id: module
+    attributes:
+      label: 영향 모듈
+      description: 문제가 발생한 모듈을 선택해 주세요.
+      options:
+        - backoffice-api
+        - backoffice-manage
+        - payment
+        - appuser-manage
+        - payment-method
+        - common
+        - docs
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: 요약
+      description: 무엇이 잘못되었는지 한두 문장으로 적어 주세요.
+      placeholder: 결제 실행 시 400 응답이 반복적으로 발생합니다.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 재현 절차
+      description: 재현 가능한 순서대로 작성해 주세요.
+      placeholder: |
+        1. 사용자를 로그인한다.
+        2. /api/payments 에 결제 준비 요청을 보낸다.
+        3. /api/payments PATCH 호출 시 오류가 발생한다.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대 결과
+      placeholder: 결제가 COMPLETED 또는 FAILED 로 정상 처리되어야 합니다.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 실제 결과
+      placeholder: 400 Bad Request 와 함께 PAYMENT_EXECUTION_NULL_VALUE 가 반환됩니다.
+    validations:
+      required: true
+  - type: input
+    id: related_adr
+    attributes:
+      label: Related ADR
+      description: Add an ADR number or link if this issue is tied to an existing decision.
+      placeholder: ADR-003
+  - type: textarea
+    id: environment
+    attributes:
+      label: 실행 환경
+      description: Java, DB, Redis, 브랜치, 커밋 등 필요한 정보를 적어 주세요.
+      placeholder: Java 21 / PostgreSQL 14 / Redis 7 / branch develop
+  - type: textarea
+    id: logs
+    attributes:
+      label: 로그 및 스크린샷
+      description: 관련 로그나 응답 본문이 있으면 붙여 주세요.
+      render: shell

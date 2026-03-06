@@ -18,18 +18,15 @@ repositories {
 }
 
 dependencies {
-    // JPA
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
 
-    // DB 드라이버
     runtimeOnly("org.postgresql:postgresql:42.7.3")
 
-    // lombok
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
 
-    // 테스트
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testRuntimeOnly("com.h2database:h2")
 }
 
 tasks.withType<Test> {

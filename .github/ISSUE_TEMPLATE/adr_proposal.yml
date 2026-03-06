@@ -1,0 +1,59 @@
+name: ADR Proposal
+description: 아키텍처 또는 운영 의사결정을 제안합니다.
+title: "[ADR] "
+labels:
+  - documentation
+body:
+  - type: input
+    id: related_issue
+    attributes:
+      label: Related Issue
+      description: Add the originating issue number if this ADR comes from a feature request or bug.
+      placeholder: "#123"
+  - type: input
+    id: adr_title
+    attributes:
+      label: 의사결정 제목
+      placeholder: 예) 결제 서비스의 멱등성 저장소를 Redis로 전환
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: 어떤 문제와 제약 때문에 이 결정을 검토하는지 적어 주세요.
+      placeholder: 트래픽 증가로 동일 요청이 중복 처리되고 있어 저장 전략 재검토가 필요합니다.
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: Decision
+      description: 제안하는 선택지를 구체적으로 적어 주세요.
+      placeholder: 멱등성 응답 저장소를 JPA에서 Redis 우선 + DB 보조 구조로 변경합니다.
+    validations:
+      required: true
+  - type: textarea
+    id: consequences
+    attributes:
+      label: Consequences
+      description: 기대 효과와 부작용을 함께 적어 주세요.
+      placeholder: |
+        (+) 응답 속도 개선
+        (-) Redis 운영 복잡도 증가
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: 영향 모듈
+      options:
+        - backoffice-api
+        - backoffice-manage
+        - payment
+        - appuser-manage
+        - payment-method
+        - common
+        - infra / docs
+    validations:
+      required: true

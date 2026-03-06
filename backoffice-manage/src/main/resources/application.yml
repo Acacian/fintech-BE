@@ -19,7 +19,7 @@ spring:
     redis:
       host: 127.0.0.1
       port: 6379
-      password: fintechhost
+      password: ${REDIS_PASSWORD:}
   application:
     name: backoffice-manage
 
@@ -67,7 +67,7 @@ spring:
     redis:
       host: 127.0.0.1
       port: 6379
-      password: fintechpass
+      password: ${REDIS_PASSWORD:}
   application:
     name: backoffice-manage
 

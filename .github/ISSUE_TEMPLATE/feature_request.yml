@@ -1,0 +1,53 @@
+name: Feature Request
+description: 기능 추가, 리팩터링, 포트폴리오 개선 아이디어를 제안합니다.
+title: "[FEATURE] "
+labels:
+  - enhancement
+body:
+  - type: dropdown
+    id: module
+    attributes:
+      label: 관련 모듈
+      description: 가장 관련이 큰 모듈을 선택해 주세요.
+      options:
+        - backoffice-api
+        - backoffice-manage
+        - payment
+        - appuser-manage
+        - payment-method
+        - common
+        - docs
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 해결하려는 문제
+      placeholder: 현재 백오피스에서 결제 이력은 조회만 가능하고, 상태 필터링이 제한적입니다.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 제안 내용
+      placeholder: 기간, 상태, 결제수단 기준의 검색 조건을 확장하고 Swagger 예시도 같이 보강합니다.
+    validations:
+      required: true
+  - type: textarea
+    id: value
+    attributes:
+      label: 기대 효과
+      placeholder: 관리자 UX 개선, 운영 응답 속도 개선, 포트폴리오 설명력 강화
+    validations:
+      required: true
+  - type: input
+    id: related_adr
+    attributes:
+      label: Related ADR
+      description: Add an ADR number or link if this request should follow an existing decision.
+      placeholder: ADR-001
+  - type: textarea
+    id: scope
+    attributes:
+      label: 영향 범위
+      placeholder: API 스펙, DB 조회 로직, README/ADR 문서
