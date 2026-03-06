@@ -26,9 +26,6 @@ public class Payment {
     @JoinColumn(name = "user_id") // FK 컬럼명. DB에서 이 이름으로 FK 생성됨
     private User user;
 
-//    @ManyToOne(fetch = FetchType.LAZY)
-//    @JoinColumn(name = "merchant_id") // FK 컬럼명. DB에서 이 이름으로 FK 생성됨
-//    private Merchant merchantId; // TODO - backoffice 쪽 merchant 참초하기 / 아니 id만 넣어놔도 되나? 어차피 내용 열어볼 일도 없을 것 같고
     private Long merchantId;
 
     private String merchantOrderId;
@@ -71,6 +68,15 @@ public class Payment {
         boolean isNull = targetList.stream().anyMatch(obj -> Objects.isNull(obj));
         if (isNull) {
             throw new IllegalArgumentException("필수 파라미터가 누락되었습니다: totalAmount, merchantId, merchantOrderId");
+        }
+        if (totalAmount <= 0) {
+            throw new IllegalArgumentException("결제 금액은 0보다 커야 합니다.");
+        }
+        if (merchantId <= 0) {
+            throw new IllegalArgumentException("merchantId는 0보다 커야 합니다.");
+        }
+        if (merchantOrderId.isBlank()) {
+            throw new IllegalArgumentException("merchantOrderId는 비어 있을 수 없습니다.");
         }
     }
 }

@@ -112,16 +112,13 @@ class PaymentExecutionServiceImplTest {
         CardInfo cardInfo = createTestCardInfo(testCardToken, "VISA", paymentMethod);
         PaymentExecutionRequest request = prepareTestRequest(TEST_TOKEN, testCardToken, paymentMethod);
 
-        // 수정: 이미 존재하는 PaymentMethod 조회 또는 생성
-
-
         // When
         PaymentExecutionResponse response = paymentExecutionService.execute(request);
 
         // Then
         assertThat(response).isNotNull();
         assertThat(response.getPaymentToken()).isEqualTo(TEST_TOKEN);
-        assertThat(response.getStatus()).isIn(PaymentStatus.COMPLETED, PaymentStatus.FAILED); // 시뮬레이션이므로 둘 다 가능
+        assertThat(response.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
         assertThat(response.getAmount()).isEqualTo(TOTAL_AMOUNT);
     }
 
@@ -136,16 +133,13 @@ class PaymentExecutionServiceImplTest {
         CardInfo cardInfo = createTestCardInfo(testCardToken, "KB국민은행", paymentMethod);
         PaymentExecutionRequest request = prepareTestRequest(TEST_TOKEN, testCardToken, paymentMethod);
 
-        //  수정: 이미 존재하는 PaymentMethod 조회 또는 생성
-
-
         // When
         PaymentExecutionResponse response = paymentExecutionService.execute(request);
 
         // Then
         assertThat(response).isNotNull();
         assertThat(response.getPaymentToken()).isEqualTo(TEST_TOKEN);
-        assertThat(response.getStatus()).isIn(PaymentStatus.COMPLETED, PaymentStatus.FAILED); // 시뮬레이션이므로 둘 다 가능
+        assertThat(response.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
         assertThat(response.getAmount()).isEqualTo(TOTAL_AMOUNT);
     }
 
@@ -160,14 +154,12 @@ class PaymentExecutionServiceImplTest {
         CardInfo cardInfo = createTestCardInfo(testCardToken, "카카오페이", paymentMethod);
         PaymentExecutionRequest request = prepareTestRequest(TEST_TOKEN, testCardToken, paymentMethod);
 
-        //수정: 이미 존재하는 PaymentMethod 조회 또는 생성
-
         // When
         PaymentExecutionResponse response = paymentExecutionService.execute(request);
 
         // Then
         assertThat(response).isNotNull();
-        assertThat(response.getStatus()).isIn(PaymentStatus.COMPLETED, PaymentStatus.FAILED); // 시뮬레이션이므로 둘 다 가능
+        assertThat(response.getStatus()).isEqualTo(PaymentStatus.COMPLETED);
     }
 
     @Test
@@ -175,7 +167,6 @@ class PaymentExecutionServiceImplTest {
     @DisplayName("존재하지 않는 카드 토큰 - 예외 발생")
     void executePayment_CardNotFound_ThrowsException() {
         // Given
-        //  수정: 이미 존재하는 PaymentMethod 조회 또는 생성
         String testCardToken = "invalid_card_token";
         User user = createTestUser();
         PaymentMethod paymentMethod = getOrCreatePaymentMethod(PaymentMethodType.CARD, user);
@@ -192,7 +183,6 @@ class PaymentExecutionServiceImplTest {
     @DisplayName("비활성화된 결제 방식 - 예외 발생")
     void executePayment_InactivePaymentMethod_ThrowsException() {
         // Given
-        // 수정: 기존 PaymentMethod를 조회하고 비활성화
         String testCardToken = "crypto_wallet_token";
         User user = createTestUser();
         PaymentMethod inactiveMethod = getOrCreatePaymentMethod(PaymentMethodType.CRYPTO, user);
@@ -239,17 +229,15 @@ class PaymentExecutionServiceImplTest {
         }
     }
 
-    // 🔥 새로운 헬퍼 메서드: 기존 PaymentMethod 조회 또는 생성
     private PaymentMethod getOrCreatePaymentMethod(PaymentMethodType type, User user) {
         List<PaymentMethod> paymentMethodList = paymentMethodRepository.findByUserIdAndMethodType(user.getUserId(), type);
         if(paymentMethodList.isEmpty()) {
             PaymentMethod newMethod = createTestPaymentMethod(type, user);
             return paymentMethodRepository.save(newMethod);
         }
-        return paymentMethodList.get(0);    // TODO - 한 userId 와 한 method type 으로 조회 했는데 paymentMethod 결과가 여러 개일 경우 어떻게 처리할지? (예 - 신용 카드만 여러 개)
+        return paymentMethodList.get(0);
     }
 
-    //  헬퍼 메서드들 - Enum 지원으로 업데이트
     private CardInfo createTestCardInfo(String token, String company, PaymentMethod paymentMethod) {
         CardInfo cardInfo = CardInfo.builder()
         .paymentMethod(paymentMethod)
@@ -268,7 +256,6 @@ class PaymentExecutionServiceImplTest {
         return cardInfo;
     }
 
-    //수정: PaymentMethodType Enum을 받도록 변경
     private PaymentMethod createTestPaymentMethod(PaymentMethodType type, User user) {
         PaymentMethod paymentMethod = new PaymentMethod();
         paymentMethod.setType(type);

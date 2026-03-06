@@ -66,8 +66,6 @@ public class ParksayTest {
         TEST_USER = createTestUser();
         TEST_METHOD = createTestPaymentMethod(PaymentMethodType.CARD, TEST_USER);
         TEST_CARD = createTestCardInfo(UUID.randomUUID().toString(), "test_card_company", TEST_METHOD);
-        //
-        System.out.println("before ========= " + TEST_TOKEN);
     }
 
     @Test
@@ -79,12 +77,8 @@ public class ParksayTest {
         //
         PaymentReadyRequest request = new PaymentReadyRequest(TEST_TOTAL_AMOUNT, TEST_MERCHANT_ID, TEST_MERCHANT_ORDER_ID);
         PaymentReadyResponse response = controller.readyPayment(createMerchantAuthorizationHeader(TEST_MERCHANT_ID), request);
-        //
         LocalDateTime limit = commonUtil.generateExpiresAt();
         limit = limit.plusSeconds(5L);  // 테스트 작동 시간
-        //
-        System.out.println("limit = " + limit);
-        System.out.println("response.getExpireAt() = " + response.getExpireAt());
         Assertions.assertNotNull(response.getPaymentToken());
         Assertions.assertTrue(response.getExpireAt().isBefore(limit));
     }
@@ -120,31 +114,17 @@ public class ParksayTest {
                 createUserAuthorizationHeader(testUser.getEmail()),
                 request
         );
-        System.out.println("cancelTest() > testResponse = " + testResponse);
 
-        // when
-        if(PaymentStatus.FAILED.equals(testResponse.getStatus())) {
-            Assertions.assertThrows(HttpException.class, ()->{
-                System.out.println("cancelTest() > ========== failed");
-                PaymentCancelResponse response = controller.cancelPayment(
-                        createMerchantAuthorizationHeader(TEST_MERCHANT_ID),
-                        testToken
-                );
-            });
-        } else {
-    //        PaymentCancelRequest request = new PaymentCancelRequest(TEST_TOKEN);
-            System.out.println("cancelTest() > ========== success");
-                PaymentCancelResponse response = controller.cancelPayment(
-                        createMerchantAuthorizationHeader(TEST_MERCHANT_ID),
-                        testToken
-                );
+        Assertions.assertEquals(PaymentStatus.COMPLETED, testResponse.getStatus());
 
-                // then
-                Assertions.assertEquals(TEST_MERCHANT_ORDER_ID, response.getMerchantOrderId());
-                Assertions.assertEquals(PaymentStatus.CANCELED, response.getStatus());
-                Assertions.assertEquals(testToken, response.getPaymentToken());
+        PaymentCancelResponse response = controller.cancelPayment(
+                createMerchantAuthorizationHeader(TEST_MERCHANT_ID),
+                testToken
+        );
 
-        }
+        Assertions.assertEquals(TEST_MERCHANT_ORDER_ID, response.getMerchantOrderId());
+        Assertions.assertEquals(PaymentStatus.CANCELED, response.getStatus());
+        Assertions.assertEquals(testToken, response.getPaymentToken());
     }
 
 

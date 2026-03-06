@@ -16,12 +16,14 @@ import com.fastcampus.paymentmethod.repository.CardInfoRepository;
 import com.fastcampus.paymentmethod.repository.PaymentMethodRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.YearMonth;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.List;
-import java.util.Random;
 import java.util.stream.Collectors;
 
 
@@ -35,16 +37,13 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class PaymentExecutionServiceImpl implements PaymentExecutionService {
 
-    // 🔥 수정: @Autowired 제거하고 final로 주입 (생성자 주입)
-    private final TransactionRepository transactionRepository; //JPA 저장소
-    private final TransactionRepositoryRedis redisTransactionRepository; //Redis 저장소
+    private static final DateTimeFormatter CARD_EXPIRY_FORMATTER = DateTimeFormatter.ofPattern("MM/yy");
+
+    private final TransactionRepository transactionRepository;
+    private final TransactionRepositoryRedis redisTransactionRepository;
     private final CardInfoRepository cardInfoRepository;
     private final PaymentMethodRepository paymentMethodRepository;
-
-    @Autowired
     private final PaymentRepository paymentRepository;
-
-    @Autowired
     private final TokenHandler tokenHandler;
     /**
      * 결제 요청을 실행하고 거래 상태를 갱신합니다.
@@ -65,7 +64,7 @@ public class PaymentExecutionServiceImpl implements PaymentExecutionService {
         PaymentMethod paymentMethod = validatePaymentMethod(request.getPaymentMethodType(), request.getUserId(), cardInfo);
 
         // 4. 결제 방식에 따른 승인 처리
-        boolean approvalResult = processPaymentByMethod(request, paymentMethod);
+        boolean approvalResult = approvePayment(payment, paymentMethod, cardInfo);
 
         //상태 결정 및 업데이트(수정)
         PaymentStatus newStatus = approvalResult ? PaymentStatus.COMPLETED : PaymentStatus.FAILED;
@@ -78,9 +77,8 @@ public class PaymentExecutionServiceImpl implements PaymentExecutionService {
         //4. DB에 저장
         savePaymentData(payment, tx);
 
-        // 5. Redis 상태 갱신 (주석 처리된 부분 활성화)
         try {
-//            redisTransactionRepository.update(tx);
+            redisTransactionRepository.update(tx);
         } catch (Exception e) {
             log.warn("Redis 업데이트 실패, DB는 정상 저장됨", e);
         }
@@ -123,10 +121,19 @@ public class PaymentExecutionServiceImpl implements PaymentExecutionService {
             throw new BadRequestException(PaymentErrorCode.PAYMENT_METHOD_NOT_FOUND);
         }
 
-        PaymentMethod method = yList.get(0);   // TODO - 한 userId 와 한 method type 으로 조회 했는데 paymentMethod 결과가 여러 개일 경우 어떻게 처리할지? (예 - 신용 카드만 여러 개)
-        if(!method.getId().equals(cardInfo.getPaymentMethod().getId())) {
+        List<PaymentMethod> matchedMethods = yList.stream()
+                .filter(method -> method.getId().equals(cardInfo.getPaymentMethod().getId()))
+                .collect(Collectors.toList());
 
-                // 요청한 userId 로 찾은 결과와 cardToken 으로 가져온 결과가 서로 다름
+        if (matchedMethods.isEmpty()) {
+            throw new BadRequestException(PaymentErrorCode.INVALID_PAYMENT_METHOD);
+        }
+        if (matchedMethods.size() > 1) {
+            throw new BadRequestException(PaymentErrorCode.INVALID_PAYMENT_METHOD);
+        }
+
+        PaymentMethod method = matchedMethods.get(0);
+        if(!method.getId().equals(cardInfo.getPaymentMethod().getId())) {
             throw new BadRequestException(PaymentErrorCode.INVALID_PAYMENT_METHOD);
         }
 
@@ -171,109 +178,47 @@ public class PaymentExecutionServiceImpl implements PaymentExecutionService {
         }
     }
 
-    /**
-     * 결제 방식에 따른 승인 처리
-     */
-    private boolean processPaymentByMethod(PaymentExecutionRequest request, PaymentMethod paymentMethod) {
+    private boolean approvePayment(Payment payment, PaymentMethod paymentMethod, CardInfo cardInfo) {
+        validatePaymentAmount(payment);
+        validateInstrumentState(paymentMethod, cardInfo);
+        return true;
+    }
+
+    private void validatePaymentAmount(Payment payment) {
+        if (payment.getTotalAmount() == null || payment.getTotalAmount() <= 0) {
+            throw new BadRequestException(PaymentErrorCode.INVALID_PAYMENT_REQUEST);
+        }
+    }
+
+    private void validateInstrumentState(PaymentMethod paymentMethod, CardInfo cardInfo) {
         PaymentMethodType methodType = paymentMethod.getType();
-
-        return switch (methodType) {
-            case CARD -> CardApproval(request.getCardToken(), methodType);
-            case BANK_TRANSFER -> BankTransferApproval(request.getCardToken(), methodType);
-            case MOBILE_PAY -> MobilePayApproval(request.getCardToken(), methodType);
-            case CRYPTO -> CryptoApproval(request.getCardToken(), methodType);
-            case PAYPAL -> PaypalApproval(request.getCardToken(), methodType);
-            case APPLE_PAY, GOOGLE_PAY -> WalletPayApproval(request.getCardToken(), methodType);
-        };
-    }
-
-    /**
-     * 카드 승인 과정을 시뮬레이션합니다.
-     */
-    private boolean CardApproval(String cardToken, PaymentMethodType methodType) {
-        try {
-            Thread.sleep(methodType.getProcessingTimeMs());
-            return new Random().nextInt(100) < methodType.getSuccessRate();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.error("카드 승인 시뮬레이션 중 인터럽트 발생", e);
-            return false;
+        switch (methodType) {
+            case CARD, APPLE_PAY, GOOGLE_PAY -> validateCardState(cardInfo);
+            case BANK_TRANSFER, MOBILE_PAY, CRYPTO, PAYPAL -> validateRegisteredInstrument(cardInfo);
         }
     }
 
-    /**
-     * 계좌이체 승인 시뮬레이션
-     */
-    private boolean BankTransferApproval(String accountToken, PaymentMethodType methodType) {
-        try {
-            Thread.sleep(methodType.getProcessingTimeMs());
-            // 계좌 잔액 확인 시뮬레이션
-            // TODO: 실제 잔액 조회 서비스 구현 후 활성화
-            // 현재는 기본 성공률로 처리
-            return new Random().nextInt(100) < methodType.getSuccessRate();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
+    private void validateCardState(CardInfo cardInfo) {
+        validateRegisteredInstrument(cardInfo);
+        if (isExpired(cardInfo.getExpiryDate())) {
+            throw new BadRequestException(PaymentErrorCode.CARD_INVALID_STATUS);
         }
     }
 
-    /**
-     * 모바일페이 승인 시뮬레이션
-     */
-    private boolean MobilePayApproval(String mobilePayToken, PaymentMethodType methodType) {
-        try {
-            Thread.sleep(methodType.getProcessingTimeMs());
-            return new Random().nextInt(100) < methodType.getSuccessRate();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
+    private void validateRegisteredInstrument(CardInfo cardInfo) {
+        if (cardInfo.getToken() == null || cardInfo.getToken().isBlank()) {
+            throw new BadRequestException(PaymentErrorCode.CARD_NOT_FOUND);
         }
     }
 
-    /**
-     * 암호화폐 승인 시뮬레이션
-     */
-    private boolean CryptoApproval(String cryptoWalletToken, PaymentMethodType methodType) {
+    private boolean isExpired(String expiryDate) {
         try {
-            Thread.sleep(methodType.getProcessingTimeMs()); // 블록체인 확인 시간
-            // 네트워크 혼잡 시뮬레이션
-            if (new Random().nextInt(100) < 10) {
-                log.warn("블록체인 네트워크 혼잡으로 인한 지연");
-                Thread.sleep(1000); // 추가 지연
-            }
-            return new Random().nextInt(100) < methodType.getSuccessRate();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
+            YearMonth yearMonth = YearMonth.parse(expiryDate, CARD_EXPIRY_FORMATTER);
+            return yearMonth.atEndOfMonth().isBefore(LocalDate.now());
+        } catch (DateTimeParseException e) {
+            throw new BadRequestException(PaymentErrorCode.CARD_INVALID_STATUS);
         }
     }
-
-    /**
-     * PayPal 승인 시뮬레이션
-     */
-    private boolean PaypalApproval(String paypalToken, PaymentMethodType methodType) {
-        try {
-            Thread.sleep(methodType.getProcessingTimeMs());
-            return new Random().nextInt(100) < methodType.getSuccessRate();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
-        }
-    }
-
-    /**
-     * 지갑형 결제 (Apple Pay, Google Pay) 승인 시뮬레이션
-     */
-    private boolean WalletPayApproval(String walletToken, PaymentMethodType methodType) {
-        try {
-            Thread.sleep(methodType.getProcessingTimeMs());
-            return new Random().nextInt(100) < methodType.getSuccessRate();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            return false;
-        }
-    }
-
 
     private void updatePaymentData(Payment payment, Transaction transaction, PaymentMethod paymentMethod, PaymentStatus paymentStatus, PaymentExecutionRequest request) {
         payment.setStatus(paymentStatus);
@@ -286,7 +231,7 @@ public class PaymentExecutionServiceImpl implements PaymentExecutionService {
         transaction.setCardToken(cardInfo.getToken());
         transaction.changePayment(payment);
         transaction.setStatus(payment.getStatus());
-        transaction.setAmount(payment.getTotalAmount());    // TODO - 결제할 금액은 총액 : payment 안에 들고 있던 totalAmount
+        transaction.setAmount(payment.getTotalAmount());
     }
 
     private void savePaymentData(Payment payment, Transaction transaction) {

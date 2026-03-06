@@ -6,15 +6,18 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import lombok.Getter;
 
 @Getter
 public class PaymentReadyRequest {
 
     @NotNull(message = "merchantId는 필수입니다.")
+    @Positive(message = "merchantId는 0보다 커야 합니다.")
     private final Long merchantId;
 
     @NotNull(message = "amount는 필수입니다.")
+    @Positive(message = "amount는 0보다 커야 합니다.")
     private final Long amount;
 
     @NotBlank(message = "merchantOrderId는 필수입니다.")

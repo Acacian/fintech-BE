@@ -80,19 +80,18 @@ public class CardInfo {
     }
 
     public String getLast4() {
-        if(this.cardNumber == null ||  this.cardNumber.isBlank()) {
-            throw new RuntimeException(""); // TODO - exception handling
+        if (this.cardNumber == null || this.cardNumber.isBlank()) {
+            throw new IllegalStateException("카드 번호가 비어 있습니다.");
         }
-        int lastIdx = this.cardNumber.lastIndexOf("-");
-        if(this.cardNumber.length() < lastIdx + 1) {
-            throw new RuntimeException(""); // TODO - exception handling
+        String digitsOnly = this.cardNumber.replaceAll("[^0-9]", "");
+        if (digitsOnly.length() < 4) {
+            throw new IllegalStateException("카드 번호 형식이 올바르지 않습니다.");
         }
-        String result = this.cardNumber.substring(lastIdx+1);
-        return result;
+        return digitsOnly.substring(digitsOnly.length() - 4);
     }
 
     public String getMaskedNumber() {
-        return "****-****-****-"+getLast4();
+        return "****-****-****-" + getLast4();
     }
 
 }

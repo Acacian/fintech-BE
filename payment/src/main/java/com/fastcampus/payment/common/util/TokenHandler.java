@@ -3,32 +3,33 @@ package com.fastcampus.payment.common.util;
 import com.fastcampus.payment.entity.Payment;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import jakarta.annotation.PostConstruct;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import java.security.Key;
 import java.time.LocalDateTime;
 import java.util.Date;
+import javax.crypto.SecretKey;
 
 @Component
+@RequiredArgsConstructor
 public class TokenHandler {
 
     @Value("${jwt.secret}")
     private String secret;
 
-    @Autowired
-    CommonUtil commonUtil;
+    private final CommonUtil commonUtil;
 
-    private Key signingKey;
-    private static String ID_KEY = "paymentId";
+    private SecretKey signingKey;
+    private static final String ID_KEY = "paymentId";
 
     @PostConstruct
     public void init() {
-        this.signingKey = Keys.hmacShaKeyFor(secret.getBytes());
+        byte[] keyBytes = Decoders.BASE64.decode(secret);
+        this.signingKey = Keys.hmacShaKeyFor(keyBytes);
     }
 
     /**
@@ -39,11 +40,11 @@ public class TokenHandler {
         LocalDateTime expTime = payment.getLastTransaction().getExpireAt();
         Date expDate = commonUtil.convertToDate(expTime);
         return Jwts.builder()
-                .setSubject("qr_token")
+                .subject("qr_token")
                 .claim(ID_KEY, payment.getId())
-                .setIssuedAt(new Date(now))
-                .setExpiration(expDate)
-                .signWith(signingKey, SignatureAlgorithm.HS256)
+                .issuedAt(new Date(now))
+                .expiration(expDate)
+                .signWith(signingKey)
                 .compact();
     }
 
@@ -52,10 +53,10 @@ public class TokenHandler {
      */
     public Long decodeQrToken(String token) {
         Claims claims = Jwts.parser()
-                .setSigningKey(signingKey)
+                .verifyWith(signingKey)
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token)
+                .getPayload();
 
         return claims.get(ID_KEY, Long.class);
     }
@@ -65,9 +66,9 @@ public class TokenHandler {
      */
     public Claims decodeQrTokenToClaims(String token) {
         return Jwts.parser()
-                .setSigningKey(signingKey)
+                .verifyWith(signingKey)
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseSignedClaims(token)
+                .getPayload();
     }
 }

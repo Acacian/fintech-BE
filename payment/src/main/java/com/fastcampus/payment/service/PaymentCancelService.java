@@ -11,6 +11,7 @@ import com.fastcampus.payment.repository.PaymentRepository;
 import com.fastcampus.payment.repository.TransactionRepository;
 import com.fastcampus.paymentmethod.entity.CardInfo;
 import com.fastcampus.paymentmethod.entity.PaymentMethod;
+import com.fastcampus.paymentmethod.entity.PaymentMethodType;
 import com.fastcampus.paymentmethod.entity.UseYn;
 import com.fastcampus.paymentmethod.repository.CardInfoRepository;
 import io.jsonwebtoken.ExpiredJwtException;
@@ -101,40 +102,31 @@ public class PaymentCancelService {
     }
 
     private void checkPaymentMethodCancellable(Payment payment) {
-        //
         Transaction transaction = payment.getLastTransaction();
         PaymentMethod paymentMethod = transaction.getPaymentMethod();
-        // 결제 수단이 카드라면 카드 정보가 취소 가능한 상태인지 먼저 확인
-        CardInfo cardInfo = cardInfoRepository.findByPaymentMethodId(paymentMethod.getId())
-                .orElseThrow(()->{throw new HttpException(PaymentErrorCode.CARD_NOT_FOUND);});
-        checkCardCancellable(cardInfo, transaction);
-        // TODO - 카드 외 결제 수단의 결제 취소 확인은 추후 확장
-    }
-
-    private void checkCardCancellable(CardInfo cardInfo, Transaction transaction) {
-        // 카드 정보와 결제 정보를 카드사에 보내고 현재 취소 가능한 상태인지 확인
-        if(UseYn.N.equals(transaction.getPaymentMethod().getUseYn())) {
+        if (UseYn.N.equals(paymentMethod.getUseYn())) {
             throw new HttpException(PaymentErrorCode.INACTIVE_PAYMENT_METHOD);
         }
-        boolean isCancellable = true; // 실제 카드사 없으니 일단 무조건 true return 하도록 해둠
-        if(!isCancellable) {
-            throw new HttpException(PaymentErrorCode.CARD_INVALID_STATUS);
+
+        if (requiresRegisteredInstrument(paymentMethod.getType())) {
+            cardInfoRepository.findByPaymentMethodId(paymentMethod.getId())
+                    .orElseThrow(() -> new HttpException(PaymentErrorCode.CARD_NOT_FOUND));
         }
+    }
+
+    private boolean requiresRegisteredInstrument(PaymentMethodType paymentMethodType) {
+        return switch (paymentMethodType) {
+            case CARD, APPLE_PAY, GOOGLE_PAY, BANK_TRANSFER, MOBILE_PAY, CRYPTO, PAYPAL -> true;
+        };
     }
 
     private void doCancelPayment(Payment payment) {
-        //
         Transaction transaction = payment.getLastTransaction();
         PaymentMethod paymentMethod = transaction.getPaymentMethod();
-        CardInfo cardInfo = cardInfoRepository.findByPaymentMethodId(paymentMethod.getId())
-                .orElseThrow(()->{throw new HttpException(PaymentErrorCode.CARD_NOT_FOUND);});
-        //
-        doCancelCard(cardInfo);
-        // TODO - 카드 외 결제 수단의 결제 취소는 추후 확장
-    }
-
-    private void doCancelCard(CardInfo cardInfo) {
-        // TODO - 카드사에 취소 요청
+        if (requiresRegisteredInstrument(paymentMethod.getType())) {
+            cardInfoRepository.findByPaymentMethodId(paymentMethod.getId())
+                    .orElseThrow(() -> new HttpException(PaymentErrorCode.CARD_NOT_FOUND));
+        }
     }
 
     private Transaction makeCancelTransaction(Payment payment) {
