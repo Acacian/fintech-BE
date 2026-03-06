@@ -17,8 +17,10 @@
 1. GitHub Issue Form의 `ADR Proposal`로 논의를 시작한다.
 2. 합의된 결정은 ADR 문서로 승격한다.
 3. 상태가 바뀌면 해당 ADR의 `Status`를 함께 갱신한다.
+4. ADR이 Accepted 또는 Rejected로 확정되면 연결된 제안 이슈를 종료한다.
 
 ## 관련 이슈
 
-- [열린 ADR 이슈 보기](https://github.com/Acacian/fintech-BE/issues?q=is%3Aissue+is%3Aopen+label%3Adocumentation+%22%5BADR%5D%22)
+- [열린 ADR 제안 이슈 보기](https://github.com/Acacian/fintech-BE/issues?q=is%3Aissue+is%3Aopen+label%3Aadr)
+- [종료된 ADR 이슈 보기](https://github.com/Acacian/fintech-BE/issues?q=is%3Aissue+is%3Aclosed+label%3Aadr)
 - ADR 문서를 추가하거나 갱신할 때는 해당 문서의 `Related Issues` 섹션에 실제 이슈 번호를 함께 남긴다.

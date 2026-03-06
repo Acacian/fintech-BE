@@ -1,5 +1,5 @@
 name: Feature Request
-description: 기능 추가, 리팩터링, 포트폴리오 개선 아이디어를 제안합니다.
+description: 기능 추가, 리팩터링, 운영 개선 아이디어를 제안합니다.
 title: "[FEATURE] "
 labels:
   - enhancement
@@ -37,7 +37,7 @@ body:
     id: value
     attributes:
       label: 기대 효과
-      placeholder: 관리자 UX 개선, 운영 응답 속도 개선, 포트폴리오 설명력 강화
+      placeholder: 관리자 UX 개선, 운영 응답 속도 개선, API 사용성 강화
     validations:
       required: true
   - type: input

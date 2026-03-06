@@ -2,7 +2,7 @@ name: ADR Proposal
 description: 아키텍처 또는 운영 의사결정을 제안합니다.
 title: "[ADR] "
 labels:
-  - documentation
+  - adr
 body:
   - type: input
     id: related_issue

@@ -18,7 +18,7 @@ Accepted
 - `backoffice-manage`: 가맹점 가입, 로그인, SDK Key 관리
 - `payment`: 결제 준비, 진행 조회, 실행, 취소
 - `appuser-manage`: 앱 사용자 가입, 인증, 카드/거래 관리
-- `payment-method`: 결제수단 도메인 공유 라이브러리
+- `payment-method`: 결제수단 도메인 공유 모듈
 - `common`: JWT, 예외, 로깅 등 공통 모듈
 
 ## Consequences
