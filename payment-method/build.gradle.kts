@@ -1,6 +1,5 @@
 plugins {
-    java
-    id("org.springframework.boot") version "3.4.5"
+    `java-library`
     id("io.spring.dependency-management") version "1.1.7"
 }
 
@@ -15,6 +14,12 @@ java {
 
 repositories {
     mavenCentral()
+}
+
+dependencyManagement {
+    imports {
+        mavenBom("org.springframework.boot:spring-boot-dependencies:3.4.5")
+    }
 }
 
 dependencies {
