@@ -119,24 +119,88 @@ flowchart TB
 - `appuser-manage`, `payment`, `backoffice-api`는 `EntityScan`과 `EnableJpaRepositories`로 공유 엔티티/리포지토리를 가져옵니다.
 - 따라서 현재 구조는 완전히 독립된 데이터 저장소를 가진 분산 시스템이라기보다, 서비스 경계를 분리한 멀티모듈 모노레포에 가깝습니다.
 
-## 결제 흐름
+### 설계 판단
+
+| 설계 포인트 | 현재 선택 | 이유 | 남는 트레이드오프 |
+| --- | --- | --- | --- |
+| 서비스 경계 | 가맹점 인증, 앱 사용자 인증, 결제 처리, 운영 조회를 런타임 서비스로 분리 | 역할별 변경 이유와 배포 단위를 분리해 충돌을 줄이기 위해 | 데이터 저장소와 일부 모델은 여전히 공유하므로 완전한 독립 서비스는 아닙니다. |
+| 공유 모듈 | `common`, `payment-method`를 공유 모듈로 유지 | 인증/예외 처리와 결제수단 도메인 모델을 중복 없이 재사용하기 위해 | 엔티티나 공통 규약 변경 시 여러 서비스가 동시에 영향을 받습니다. |
+| 인증 경계 | `MERCHANT_ACCESS_TOKEN`, `MERCHANT_API_KEY`, `USER_ACCESS_TOKEN`을 구분 | 운영 API와 결제 API, 사용자 승인 행위를 서로 다른 신뢰 경계로 분리하기 위해 | 자격 증명 종류가 늘어나므로 발급과 회전 규칙을 함께 관리해야 합니다. |
+| 운영 조회 방식 | `backoffice-api`가 `payment`, `payment-method` 모델을 직접 스캔 | 별도 조회 전용 저장소 없이 운영 조회를 빠르게 제공하기 위해 | CQRS projection 구조보다 결합도가 높고, 조회 모델 독립성은 낮습니다. |
+
+## 결제 흐름과 현재 범위
+
+현재 구현은 외부 PG의 전체 checkout/redirect/confirm 모델을 그대로 복제하기보다,
+가맹점이 결제 세션을 만들고 앱 사용자가 등록된 결제수단으로 승인하는 내부 결제 오케스트레이션에 초점을 둡니다.
 
 ```mermaid
 sequenceDiagram
-    participant M as Merchant
+    autonumber
+    participant M as Merchant Backend
     participant BM as backoffice-manage
+    participant BA as backoffice-api
     participant U as App User
     participant AU as appuser-manage
     participant P as payment
-    participant BA as backoffice-api
 
-    M->>BM: 가맹점 가입 / 로그인
-    U->>AU: 사용자 가입 / 로그인
+    M->>BM: 로그인
+    BM-->>M: MERCHANT_ACCESS_TOKEN
+    M->>BA: API Key 발급 요청
+    BA-->>M: MERCHANT_API_KEY
+
+    U->>AU: 로그인
+    AU-->>U: USER_ACCESS_TOKEN
     U->>AU: 카드 등록
-    M->>P: POST /api/payments
-    U->>P: PATCH /api/payments
-    M->>BA: GET /merchants/payment-histories
+    AU-->>U: CARD_TOKEN
+
+    M->>P: 결제 준비 요청\nmerchantOrderId, amount\nAuthorization: MERCHANT_API_KEY
+    P-->>M: paymentToken, expireAt\nstatus = READY
+
+    U->>P: 결제 실행 요청\npaymentToken, cardToken\nAuthorization: USER_ACCESS_TOKEN
+    P-->>U: 승인 결과\nstatus = COMPLETED | FAILED
+
+    opt 운영 조회
+        M->>BA: 결제 이력/상세 조회\nAuthorization: MERCHANT_ACCESS_TOKEN
+        BA-->>M: Payment history / detail
+    end
+
+    opt 결제 취소
+        M->>P: 결제 취소 요청\npaymentToken\nAuthorization: MERCHANT_API_KEY
+        P-->>M: status = CANCELED
+    end
 ```
+
+- 결제 식별자는 외부 PG의 `paymentKey`가 아니라 내부 결제 세션용 `paymentToken`입니다.
+- 결제 실행은 리다이렉트 기반 승인 대신, 앱 사용자가 등록한 결제수단(`cardToken`)을 선택해 승인하는 방식입니다.
+- 운영 조회는 별도 이벤트 프로젝션 저장소 없이 `backoffice-api`에서 현재 결제/거래 데이터를 직접 조회합니다.
+
+### 인증·호출 경계
+
+| 자격 증명 | 발급 서비스 | 사용 주체 | 사용 구간 |
+| --- | --- | --- | --- |
+| `MERCHANT_ACCESS_TOKEN` | `backoffice-manage` | 가맹점 운영 사용자 | API Key 발급/조회, 결제 이력 조회 |
+| `MERCHANT_API_KEY` | `backoffice-api` | 가맹점 서버 또는 백엔드 | 결제 준비, 결제 취소 |
+| `USER_ACCESS_TOKEN` | `appuser-manage` | 앱 사용자 | 카드 관리, 결제 실행 |
+| `CARD_TOKEN` | `appuser-manage` | 앱 사용자 소유 결제수단 | 저장된 카드 식별 |
+
+### 외부 PG 기준 비교
+
+| 항목 | 현재 구현 | 외부 PG 표준 흐름과의 차이 |
+| --- | --- | --- |
+| 결제 시작 | 가맹점 서버가 `merchantOrderId`, `amount`로 내부 결제 세션 생성 | 클라이언트 SDK/위젯 기반 checkout 진입과 success/fail redirect를 포함하지 않습니다. |
+| 결제 승인 | 앱 사용자가 `paymentToken + cardToken`으로 직접 승인 | 서버 confirm API를 통해 외부 승인 식별자와 금액을 최종 확정하는 구조는 포함하지 않습니다. |
+| 상태 동기화 | `GET /api/payments/{paymentToken}`와 운영 조회 API로 확인 | webhook, 정산 이벤트, 비동기 상태 재동기화 계층은 두지 않았습니다. |
+| 취소 모델 | 가맹점이 내부 `paymentToken` 기준으로 전체 취소 | 취소 사유, 부분 취소, 외부 게이트웨이 거래 식별자 기준 취소는 현재 범위 밖입니다. |
+
+현재 README의 결제 흐름은 "외부 PG를 완전히 대체하는 시스템"이 아니라,
+"결제 세션 생성, 사용자 승인, 운영 조회, 취소"라는 핵심 라이프사이클을 분리된 모듈과 권한 경계로 구현한 상태를 설명합니다.
+
+### 현재 범위에서 제외한 항목
+
+- 클라이언트 SDK/위젯 checkout, redirect success/fail 흐름
+- 외부 승인 식별자 기반 confirm API
+- webhook 기반 상태 반영과 비동기 정산 이벤트 처리
+- 부분 취소, 취소 사유 기록, 재시도 정책
 
 ## 서비스별 담당 영역
 
